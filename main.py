@@ -77,8 +77,7 @@ def generate_stock_chart(df, stock_name, stock_id):
     return buf.getvalue()
 
 def get_top500_symbols():
-    """從 Yahoo Finance 模擬抓取台灣前 500 大代表性股票清單（可依需求擴充）"""
-    # 這裡先示範常用熱門強勢股代號，後續可自動抓取台股全市場清單
+    """從 Yahoo Finance 抓取代表性股票清單"""
     symbols = [
         "2330.TW", "2317.TW", "2454.TW", "2308.TW", "2382.TW", 
         "3231.TW", "3017.TW", "2356.TW", "2376.TW", "6669.TW",
@@ -109,10 +108,6 @@ def main():
             latest = df.iloc[-1]
             prev = df.iloc[-2]
             
-            # 篩選條件：
-            # 1. 突破 MA60 (昨日收盤 <= MA60 且 今日收盤 > MA60)
-            # 2. 爆量 (今日成交量 >= 5日均量 2 倍)
-            # 3. 實體長紅 K (漲幅 2% ~ 7%，實體大於 70%)
             body = abs(latest['Close'] - latest['Open'])
             total_range = latest['High'] - latest['Low']
             body_ratio = body / total_range if total_range > 0 else 0
@@ -147,7 +142,7 @@ def main():
             send_telegram_photo(stock['chart'], caption)
     else:
         send_telegram_message(
-            "🔥 **【高勝率台股選股通知】**\n\n"
+            "【高勝率台股選股通知】\n\n"
             "今日掃描完成：未有同時符合嚴格多頭突破條件的個股。"
         )
 
