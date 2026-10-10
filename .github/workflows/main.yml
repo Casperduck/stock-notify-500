@@ -21,4 +21,4 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas numpy yfinance requests lxml html5li matplotlib
+          pip install pandas numpy yfinance requests lxml html5lib matplotlib
