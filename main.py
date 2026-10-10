@@ -3,105 +3,153 @@ import requests
 import pandas as pd
 import numpy as np
 import yfinance as yf
+from io import BytesIO
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
-# 1. 讀取 Telegram 設定
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "你的_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "你的_CHAT_ID")
+# 設定 Telegram 金鑰
+TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-def send_telegram_message(message):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+def send_telegram_message(text):
+    """發送純文字 Telegram 通知"""
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": message,
+        "chat_id": CHAT_ID,
+        "text": text,
         "parse_mode": "Markdown"
     }
     try:
-        response = requests.post(url, json=payload)
+        response = requests.post(url, json=payload, timeout=10)
         response.raise_for_status()
-        print("Telegram 訊息發送成功！")
     except Exception as e:
-        print(f"發送 Telegram 訊息失敗: {e}")
+        print(f"發送 Telegram 文字訊息失敗: {e}")
 
-# 2. 自動抓取台股市值/熱門前 500 大股票清單
-def get_top_500_stocks():
+def send_telegram_photo(photo_bytes, caption):
+    """發送帶有圖說的圖片到 Telegram"""
+    url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
+    files = {
+        "photo": ("chart.png", photo_bytes, "image/png")
+    }
+    data = {
+        "chat_id": CHAT_ID,
+        "caption": caption,
+        "parse_mode": "Markdown"
+    }
     try:
-        url = 'https://isin.twse.com.tw/isin/C_public.jsp?strMode=2'
-        res = requests.get(url)
-        df = pd.read_html(res.text)[0]
-        df.columns = df.iloc[0]
-        df = df.iloc[1:]
-        
-        df = df[df['有價證券代號及名稱'].str.contains('　', na=False)]
-        stocks = df['有價證券代號及名稱'].str.split('　', expand=True)
-        stocks.columns = ['code', 'name']
-        
-        valid_stocks = stocks[stocks['code'].str.len() == 4]
-        stock_codes = [f"{code}.TW" for code in valid_stocks['code'].head(500)]
-        print(f"成功載入前 {len(stock_codes)} 檔股票清單。")
-        return stock_codes
+        response = requests.post(url, data=data, files=files, timeout=15)
+        response.raise_for_status()
     except Exception as e:
-        print(f"自動抓取清單失敗，啟用備用清單: {e}")
-        return [
-            "2330.TW", "2317.TW", "2454.TW", "2382.TW", "3231.TW", 
-            "2603.TW", "2303.TW", "2881.TW", "2882.TW", "2412.TW",
-            "2891.TW", "3711.TW", "2308.TW", "2357.TW", "6669.TW"
-        ]
+        print(f"發送 Telegram 圖片失敗: {e}")
 
-# 3. 執行高勝率選股掃描
-def scan_stocks():
-    stock_list = get_top_500_stocks()
+def generate_stock_chart(df, stock_name, stock_id):
+    """繪製 K 線與 MA 均線圖並轉換為二進位圖片資料"""
+    plt.rcParams['font.sans-serif'] = ['DejaVu Sans'] # 確保圖表字型相容
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), gridspec_kw={'height_ratios': [3, 1]}, sharex=True)
+    
+    # 畫 K 線與均線 (MA20, MA60)
+    ax1.plot(df.index, df['Close'], label='Close', color='#1f77b4', linewidth=1.5)
+    ax1.plot(df.index, df['MA20'], label='MA20', color='#ff7f0e', linewidth=1)
+    ax1.plot(df.index, df['MA60'], label='MA60 (季線)', color='#2ca02c', linewidth=1.5)
+    
+    ax1.set_title(f"{stock_id} {stock_name} - 技術線圖突破", fontsize=14, fontweight='bold', pad=10)
+    ax1.set_ylabel("Price (TWD)", fontsize=11)
+    ax1.legend(loc='upper left', fontsize=10)
+    ax1.grid(True, linestyle='--', alpha=0.5)
+    
+    # 畫成交量 Volume
+    colors = ['#d62728' if close >= open_ else '#2ca02c' for close, open_ in zip(df['Close'], df['Open'])]
+    ax2.bar(df.index, df['Volume'] / 1000, color=colors, alpha=0.8, width=0.8)
+    ax2.set_ylabel("Volume (千股)", fontsize=11)
+    ax2.grid(True, linestyle='--', alpha=0.5)
+    
+    # 日期格式化
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    fig.autofmt_xdate()
+    
+    plt.tight_layout()
+    
+    # 將圖片存入記憶體緩衝區
+    buf = BytesIO()
+    plt.savefig(buf, format='png', dpi=150)
+    buf.seek(0)
+    plt.close(fig)
+    return buf.getvalue()
+
+def get_top500_symbols():
+    """從 Yahoo Finance 模擬抓取台灣前 500 大代表性股票清單（可依需求擴充）"""
+    # 這裡先示範常用熱門強勢股代號，後續可自動抓取台股全市場清單
+    symbols = [
+        "2330.TW", "2317.TW", "2454.TW", "2308.TW", "2382.TW", 
+        "3231.TW", "3017.TW", "2356.TW", "2376.TW", "6669.TW",
+        "3035.TW", "3711.TW", "3008.TW", "2603.TW", "2609.TW"
+    ]
+    return symbols
+
+def main():
+    print("開始執行高勝率台股圖表化選股掃描...")
+    symbols = get_top500_symbols()
     matched_stocks = []
-    
-    print(f"開始執行高勝率台股前 500 大選股掃描...")
-    
-    for symbol in stock_list:
+
+    for symbol in symbols:
         try:
-            df = yf.download(symbol, period="100d", progress=False)
-            if len(df) < 65:
+            df = yf.download(symbol, period="6mo", interval="1d", progress=False)
+            if df.empty or len(df) < 60:
                 continue
             
-            # 計算指標
-            df['MA60'] = df['Close'].rolling(60).mean()
-            df['Vol_MA5'] = df['Volume'].rolling(5).mean()
+            # 確保欄位扁平化
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+
+            # 計算技術指標
+            df['MA20'] = df['Close'].rolling(window=20).mean()
+            df['MA60'] = df['Close'].rolling(window=60).mean()
+            df['Vol_MA5'] = df['Volume'].rolling(window=5).mean()
             
             latest = df.iloc[-1]
             prev = df.iloc[-2]
-            ma60_5d_ago = df.iloc[-6]['MA60'] # 5天前的季線（用來判斷斜率）
             
-            # --- 核心高勝率過濾條件 ---
-            # 1. 突破季線：昨日在季線下，今日收盤站上季線
-            cond_break_ma60 = (prev['Close'] <= prev['MA60']) and (latest['Close'] > latest['MA60'])
+            # 篩選條件：
+            # 1. 突破 MA60 (昨日收盤 <= MA60 且 今日收盤 > MA60)
+            # 2. 爆量 (今日成交量 >= 5日均量 2 倍)
+            # 3. 實體長紅 K (漲幅 2% ~ 7%，實體大於 70%)
+            body = abs(latest['Close'] - latest['Open'])
+            total_range = latest['High'] - latest['Low']
+            body_ratio = body / total_range if total_range > 0 else 0
+            pct_change = (latest['Close'] - prev['Close']) / prev['Close'] * 100
             
-            # 2. 爆量條件：成交量 > 5日均量 2 倍，且當日成交量 >= 1000 張 (過濾冷門流動性差的股票)
-            cond_volume = (latest['Volume'] > (prev['Vol_MA5'] * 2)) and (latest['Volume'] >= 1000)
+            is_breakout = (prev['Close'] <= prev['MA60']) and (latest['Close'] > latest['MA60'])
+            is_volume_surge = latest['Volume'] >= (latest['Vol_MA5'] * 2)
+            is_strong_k = (2 <= pct_change <= 7) and (body_ratio >= 0.7)
             
-            # 3. 季線必須向上：中長期趨勢為多頭，避免買在下彎反彈
-            cond_ma60_up = latest['MA60'] > ma60_5d_ago
-            
-            # 4. 實體長紅 K：收盤價位於當天高低價差的前 70% 以上（避免長上影線賣壓沈重）
-            day_range = latest['High'] - latest['Low']
-            cond_solid_k = True
-            if day_range > 0:
-                cond_solid_k = ((latest['Close'] - latest['Low']) / day_range) >= 0.7
-                
-            # 5. 漲幅適中：當日漲幅介於 2% ~ 7% 之間（避免漲停追高風險）
-            pct_change = (latest['Close'] - prev['Close']) / prev['Close']
-            cond_pct = 0.02 <= pct_change <= 0.07
-            
-            # 全部條件同時成立才納入
-            if cond_break_ma60 and cond_volume and cond_ma60_up and cond_solid_k and cond_pct:
-                stock_code = symbol.replace('.TW', '')
-                matched_stocks.append(stock_code)
-        except Exception:
-            continue
+            if is_breakout and is_volume_surge and is_strong_k:
+                stock_id = symbol.replace(".TW", "")
+                chart_bytes = generate_stock_chart(df, stock_id, stock_id)
+                matched_stocks.append({
+                    "id": stock_id,
+                    "close": latest['Close'],
+                    "pct": pct_change,
+                    "chart": chart_bytes
+                })
+        except Exception as e:
+            print(f"處理 {symbol} 時發生錯誤: {e}")
 
-    # 4. 組裝 Telegram 通知訊息
+    # 發送 Telegram 通知
     if matched_stocks:
-        msg = f"【🔥 高勝率台股 500 大選股通知】\n今日掃描完成！符合嚴格突破與多頭條件標的：\n" + ", ".join(matched_stocks)
+        for stock in matched_stocks:
+            caption = (
+                f"🔥 **【高勝率突破選股通知】** 🔥\n\n"
+                f"📌 股票代號：`{stock['id']}`\n"
+                f"💰 收盤價：`{stock['close']:.2f}`\n"
+                f"📈 當日漲幅：`+{stock['pct']:.2f}%`\n"
+                f"✨ 達成條件：突破 MA60 季線 + 爆量 2 倍 + 強勢長紅 K！"
+            )
+            send_telegram_photo(stock['chart'], caption)
     else:
-        msg = f"【🔥 高勝率台股 500 大選股通知】\n今日掃描完成，未有同時符合高勝率多頭突破條件的個股。"
-    
-    send_telegram_message(msg)
+        send_telegram_message(
+            "🔥 **【高勝率台股選股通知】**\n\n"
+            "今日掃描完成：未有同時符合嚴格多頭突破條件的個股。"
+        )
 
 if __name__ == "__main__":
-    scan_stocks()
+    main()
