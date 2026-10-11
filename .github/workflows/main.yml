@@ -19,10 +19,16 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install pandas numpy yfinance requests lxml html5lib matplotlib
+          pip install pandas numpy yfinance requests beautifulsoup4
 
-      - name: Run Python Script
+      - name: Run Stock Screener (模組一、二)
         run: python main.py
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+      - name: Run Sentiment Analysis (模組三)
+        run: python sentiment.py
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
