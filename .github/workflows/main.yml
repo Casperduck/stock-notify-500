@@ -19,8 +19,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install pandas numpy yfinance requests beautifulsoup4
-
+          pip install pandas numpy yfinance requests beautifulsoup4 matplotlib
       - name: Run Stock Screener (模組一、二)
         run: python main.py
         env:
