@@ -80,7 +80,7 @@ def check_institutional_and_volume_resonance(code):
             
             if is_volume_breakout and is_trend_up:
                 support_price = round(ma5, 2)
-                resistance_price = round(current_price * 1.05, 2)  # 預期壓 力約上方 5%
+                resistance_price = round(current_price * 1.05, 2)  # 預期壓力約上方 5%
                 change_p = ((current_price - df['Close'].iloc[-2]) / df['Close'].iloc[-2]) * 100
                 
                 return True, round(current_price, 2), round(change_p, 2), support_price, resistance_price
@@ -129,7 +129,8 @@ def main():
         for s in triggered_stocks:
             stock_lines.append(f"• `{s['name']} ({s['code']})`: 現價 `{s['price']}` (`{s['change']:+.2f}%`) | 建議支撐: `{s['support']}` | 預期壓力: `{s['resistance']}`")
         
-        stock_text = "\n".join([f"{s['name']} ({s['code'])})" for s in triggered_stocks])
+        # 修正後的正確字串格式
+        stock_text = "\n".join([f"{s['name']} ({s['code']})" for s in triggered_stocks])
         primary_stock = triggered_stocks[0]
         
         report = (
