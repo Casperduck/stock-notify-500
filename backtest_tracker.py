@@ -4,12 +4,11 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# 設定 Telegram 金鑰
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 def send_telegram_alert(text):
-    """發送勝率追蹤與績效報告至 Telegram"""
+    """發送策略勝率與績效報告至 Telegram"""
     if not TOKEN or not CHAT_ID:
         print("未設定 Telegram 金鑰，略過發送。")
         return
@@ -21,22 +20,27 @@ def send_telegram_alert(text):
     except Exception as e:
         print(f"發送歷史勝率追蹤通知失敗: {e}")
 
-def track_historical_performance():
-    print("開始執行歷史策略勝率與績效追蹤...")
+def track_strategy_performance():
+    print("開始執行『系統策略推薦標的』歷史勝率與績效追蹤...")
     
-    # 這裡可以隨著日後 Google Sheets 累積的歷史選股資料進行擴充
-    # 目前為示範結構：追蹤過去所挑選標的的表現
-    sample_historical_picks = [
-        {"code": "3455.TW", "name": "由田", "pick_date": "2026-10-01", "pick_price": 280.0},
-        {"code": "6239.TW", "name": "力成", "pick_date": "2026-10-01", "pick_price": 295.0}
+    # 【嚴格規範】這裡僅記錄「系統條件篩選出的推薦標的」，絕不包含個人持股庫存
+    # 隨著每日自動化掃頻執行，系統會將選出的標的累積於此（或透過 Google 試算表同步回測）
+    # 目前為空清單或模擬歷史推薦池，等待系統累積真實數據
+    strategy_recommended_picks = [
+        # 範例格式：{"code": "2330.TW", "name": "台積電", "pick_date": "2026-10-01", "pick_price": 1000.0}
     ]
     
+    if not strategy_recommended_picks:
+        print("目前尚無累積的策略推薦歷史標的，等待每日選股累積中...")
+        # 也可以選擇不發送訊息，或發送提示
+        return
+
     win_count = 0
-    total_count = len(sample_historical_picks)
+    total_count = len(strategy_recommended_picks)
     return_sum = 0.0
     report_lines = []
     
-    for pick in sample_historical_picks:
+    for pick in strategy_recommended_picks:
         try:
             ticker = yf.Ticker(pick["code"])
             df = ticker.history(period="5d")
@@ -46,7 +50,7 @@ def track_historical_performance():
                 return_sum += ret
                 if ret > 0:
                     win_count += 1
-                report_lines.append(f"• `{pick['name']}` ({pick['pick_date']}推薦): 現價 `{current_price:.2f}` | 累積報酬: `{ret:+.2f}%`")
+                report_lines.append(f"• `{pick['name']}` ({pick['pick_date']}策略推薦): 現價 `{current_price:.2f}` | 累積報酬: `{ret:+.2f}%`")
         except Exception as e:
             print(f"計算 {pick['name']} 績效失敗: {e}")
             
@@ -55,17 +59,15 @@ def track_historical_performance():
         win_rate = (win_count / total_count) * 100
         
         summary_text = (
-            f"📊 **【策略歷史勝率與績效追蹤】**\n"
-            f"📈 樣本數：`{total_count} 檔`\n"
-            f"🎯 累積勝率：`{win_rate:.1f}%`\n"
+            f"📊 **【系統策略選股歷史勝率與績效】**\n"
+            f"📈 推薦樣本數：`{total_count} 檔`\n"
+            f"🎯 策略累積勝率：`{win_rate:.1f}%`\n"
             f"💰 平均報酬率：`{avg_return:+.2f}%`\n\n"
-            f"🔍 **近期標的追蹤明細**：\n" + "\n".join(report_lines)
+            f"🔍 **策略推薦標的追蹤明細**：\n" + "\n".join(report_lines)
         )
         
         send_telegram_alert(summary_text)
-        print("已發送歷史勝率追蹤報告至 Telegram。")
-    else:
-        print("目前尚無歷史追蹤樣本。")
+        print("已發送策略歷史勝率追蹤報告至 Telegram。")
 
 if __name__ == "__main__":
-    track_historical_performance()
+    track_strategy_performance()
