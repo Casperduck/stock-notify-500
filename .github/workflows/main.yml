@@ -2,8 +2,9 @@ name: High Win-Rate Stock Scan
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '30 8 * * 1-5' # 台灣時間每天下午 4:30
+  schedule:
+    - cron: '30 8 * * 1-5' # 台灣時間每週一至週五下午 4:30
+
 
 jobs:
   run-scanner:
