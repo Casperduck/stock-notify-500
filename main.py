@@ -7,7 +7,7 @@ from datetime import datetime
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-SHEET_WEBHOOK_URL = os.environ.get("SHEET_WEBHOOK_URL", "") # Google Apps Script 接收網址
+SHEET_WEBHOOK_URL = os.environ.get("SHEET_WEBHOOK_URL", "")
 
 def send_telegram_message(message):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
@@ -26,7 +26,6 @@ def send_telegram_message(message):
         print(f"發送失敗：{e}")
 
 def log_to_google_sheet(data):
-    """將推薦個股自動寫入 Google 試算表，長期追蹤勝率與投報率"""
     if not SHEET_WEBHOOK_URL:
         print("尚未設定 Google Sheet Webhook URL，跳過試算表紀錄")
         return
@@ -37,10 +36,6 @@ def log_to_google_sheet(data):
         print(f"寫入試算表失敗：{e}")
 
 def check_institutional_buying(symbol):
-    """
-    檢查外資或投信是否連續買超三天
-    透過證交所公開籌碼 API 進行判斷（若遇網路波動預設放行以維持系統流暢）
-    """
     try:
         code = symbol.split(".")[0]
         url = "https://www.twse.com.tw/rwd/zh/fund/T86?selectType=ALL&response=json"
@@ -55,7 +50,7 @@ def check_institutional_buying(symbol):
     except Exception:
         return True
 
-# 測試股票清單（可在此擴充至 500 大或完整台股代號）
+# 測試股票清單（後續可在此擴充至 500 大股票清單）
 stocks = ["2330.TW", "2317.TW", "2454.TW", "2382.TW", "2881.TW", "3711.TW", "2603.TW"]
 
 results = []
@@ -74,28 +69,28 @@ for symbol in stocks:
         low = df['Low']
         volume = df['Volume']
 
-        # 1. 均線計算：10日、20日均線
+        # 1. 突破 10 日、20 日均線
         ma10 = close.rolling(window=10).mean().iloc[-1]
         ma20 = close.rolling(window=20).mean().iloc[-1]
         latest_close = close.iloc[-1]
         
-        # 2. 量能條件：當日交易量必須大於前五日平均交易量
+        # 2. 當日交易量大於前五日平均交易量
         latest_vol = volume.iloc[-1]
         avg_vol_5 = volume.iloc[-6 : -1].mean()
         
-        # 3. 籌碼條件：外資或投信連續買超三天
+        # 3. 外資或投信連續買超三天
         inst_buying = check_institutional_buying(symbol)
         
         # 4. 產業強弱評估
         industry_status = "🔥 主流強勢 (AI / 半導體族群)" if symbol in ["2330.TW", "2454.TW", "3711.TW"] else "📈 穩健盤堅"
 
-        # 綜合篩選邏輯
+        # 綜合篩選條件
         if latest_close > ma10 and latest_close > ma20 and latest_vol > avg_vol_5 and inst_buying:
-            # 5. 計算支撐點、壓力點、進場價位與停損點
+            # 5. 支撐點、壓力點、進場價位與停損點
             support = round(low.rolling(window=20).min().iloc[-1], 2)
             pressure = round(high.rolling(window=20).max().iloc[-1], 2)
             entry_price = round(latest_close, 2)
-            stop_loss = round(support * 0.97, 2) # 停損設在支撐下方 3%
+            stop_loss = round(support * 0.97, 2)
             
             stock_info = {
                 "date": today_str,
@@ -108,14 +103,11 @@ for symbol in stocks:
                 "score": latest_vol / avg_vol_5
             }
             results.append(stock_info)
-            
-            # 同步寫入試算表追蹤
             log_to_google_sheet(stock_info)
             
     except Exception as e:
         print(f"處理 {symbol} 發生錯誤: {e}")
 
-# 每次最多挑選 5 檔最強勢標的
 results = sorted(results, key=lambda x: x['score'], reverse=True)[:5]
 
 report_lines = [f"📊 *【台股 500 大全方位選股與勝率追蹤報告】* `{today_str}`\n"]
@@ -137,4 +129,4 @@ else:
 
 final_message = "\n".join(report_lines)
 send_telegram_message(final_message)
-print("500大主程式執行完畢！")
+print("選股與追蹤流程執行完畢！")
