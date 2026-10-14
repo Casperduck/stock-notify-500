@@ -50,7 +50,7 @@ def check_institutional_buying(symbol):
     except Exception:
         return True
 
-# 測試股票清單（後續可在此擴充至 500 大股票清單）
+# 測試股票清單（可依需求擴充至 500 大）
 stocks = ["2330.TW", "2317.TW", "2454.TW", "2382.TW", "2881.TW", "3711.TW", "2603.TW"]
 
 results = []
@@ -100,6 +100,7 @@ for symbol in stocks:
                 "pressure": pressure,
                 "stop_loss": stop_loss,
                 "industry": industry_status,
+                "institutional": "外資/投信連續買超三日",
                 "score": latest_vol / avg_vol_5
             }
             results.append(stock_info)
